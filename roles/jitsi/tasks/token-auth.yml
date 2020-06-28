@@ -1,0 +1,120 @@
+---
+- name: "Set debconf jitsi-meet-prosody/jvb-hostname"
+  debconf:
+    name: jitsi-meet-prosody 
+    question: jitsi-meet-prosody/jvb-hostname
+    value: "{{ jitsi_hostname }}"
+    vtype: string
+
+- name: "Set debconf jitsi-meet-tokens/appid"
+  debconf:
+    name: jitsi-meet-tokens
+    question: jitsi-meet-tokens/appid
+    value: "{{ app_id }}"
+    vtype: string
+
+- name: "Set debconf jitsi-meet-tokens/appsecret"
+  debconf:
+    name: jitsi-meet-tokens
+    question: jitsi-meet-tokens/appsecret
+    value: "{{ app_secret }}"
+    vtype: string
+
+- name: "install jitsi-meet-tokens"
+  apt: 
+    name:
+    - jitsi-meet-tokens
+
+- name: Configure Prosody Component settings
+  blockinfile:
+    path: /etc/prosody/prosody.cfg.lua
+    insertafter: 'admins = { }'
+    marker: "-- {mark} ANSIBLE MANAGED BLOCK"
+    block: |
+      component_ports = { 5347 }
+      component_interface = "0.0.0.0"
+
+- name: Disable c2s_require_encryption
+  replace:
+    path: /etc/prosody/prosody.cfg.lua
+    regexp: 'c2s_require_encryption = true'
+    replace: 'c2s_require_encryption = false'
+
+- name: Change Jisti Auth - Token
+  replace:
+    path: /etc/prosody/conf.avail/{{ jitsi_hostname }}.cfg.lua
+    regexp: 'authentication = \"anonymous\"'
+    replace: 'authentication = "token"'
+
+- name: Set App ID
+  replace:
+    path: /etc/prosody/conf.avail/{{ jitsi_hostname }}.cfg.lua
+    regexp: '\-\-app_id=\"example_app_id\"'
+    replace: 'app_id = "{{ app_id }}"'
+
+- name: Set App Secret
+  replace:
+    path: /etc/prosody/conf.avail/{{ jitsi_hostname }}.cfg.lua
+    regexp: '\-\-app_secret=\"example_app_secret\"'
+    replace: 'app_secret = "{{ app_secret }}"'
+
+- name: Enable Module Presence Identity 
+  replace:
+    path: /etc/prosody/conf.avail/{{ jitsi_hostname }}.cfg.lua
+    regexp: '\"bosh\";'
+    replace: '"bosh";\n            "presence_identity";'
+
+- name: Enable Token Verification Module
+  replace:
+    path: /etc/prosody/conf.avail/{{ jitsi_hostname }}.cfg.lua
+    regexp: '\-\- \"token_verification\";'
+    replace: '"token_verification";'
+
+- name: Insert Guest Config
+  blockinfile:
+    path: /etc/prosody/conf.avail/{{ jitsi_hostname }}.cfg.lua
+    insertbefore: 'VirtualHost \"{{ jitsi_hostname }}\"'
+    marker: "-- {mark} ANSIBLE MANAGED BLOCK"
+    block: |
+      VirtualHost "guest.{{ jitsi_hostname }}"
+              authentication = "anonymous"
+              app_id="{{ app_id }}"
+              app_secret="{{ app_secret }}"
+              c2s_require_encryption=true
+              allow_empty_token=true
+
+- name: Enable Anonymous Domain
+  replace:
+    path: /etc/jitsi/meet/{{ jitsi_hostname }}-config.js
+    regexp: "// anonymousdomain: 'guest.example.com'"
+    replace: "anonymousdomain: 'guest.{{ jitsi_hostname }}'"
+
+- name: Enable Roles Based On Token
+  replace:
+    path: /etc/jitsi/meet/{{ jitsi_hostname }}-config.js
+    regexp: "enableUserRolesBasedOnToken: false"
+    replace: "enableUserRolesBasedOnToken: true"
+
+- name: Configure Jicofo sip-communicator.properties
+  blockinfile:
+    path: /etc/jitsi/jicofo/sip-communicator.properties
+    block: |
+      org.jitsi.jicofo.auth.URL=XMPP:{{ jitsi_hostname }}
+      org.jitsi.jicofo.auth.DISABLE_AUTOLOGIN=true
+
+- name: Set Jicofo Hostname
+  replace:
+    path: /etc/jitsi/jicofo/config
+    regexp: "JICOFO_HOST=localhost"
+    replace: "JICOFO_HOST={{ jitsi_hostname }}"
+
+- name: Set JVB Hostname
+  replace:
+    path: /etc/jitsi/videobridge/config
+    regexp: 'JVB_HOST=\s'
+    replace: "JVB_HOST={{ jitsi_hostname }}"
+
+- name: JVB Autobind
+  lineinfile:
+    path: /etc/jitsi/videobridge/config
+    line: "AUTHBIND=yes"

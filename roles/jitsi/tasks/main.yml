@@ -1,0 +1,156 @@
+---
+- name: "set hostname"
+  shell: "hostnamectl set-hostname {{ jitsi_hostname }}"
+
+- name: register hostname in local dns
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }} {{ jitsi_hostname }}"
+
+- name: "install gcc"
+  apt: 
+    name:
+    - gcc
+
+- name: "install unzip"
+  apt: 
+    name:
+    - unzip
+
+- name: "install lua5.2"
+  apt: 
+    name:
+    - lua5.2
+
+- name: "install liblua5.2-dev"
+  apt: 
+    name:
+    - liblua5.2-dev
+
+- name: "install luarocks"
+  apt: 
+    name:
+    - luarocks
+
+- name: "luarocks install basexx"
+  shell: "luarocks install basexx"
+
+- name: "install libssl1.0-dev"
+  apt: 
+    name:
+    - libssl1.0-dev
+
+- name: "luarocks install luacrypto"
+  shell: "luarocks install luacrypto"
+
+- name: Copy file with owner and permissions
+  copy:
+    src: luacjson.sh
+    dest: ~/luacjson.sh
+    owner: root
+    group: root
+    mode: '0644'
+    force: yes
+
+- name: "sh luacjson.sh"
+  shell: "sh /root/luacjson.sh"
+
+- name: "remove luacjson.sh"
+  file:
+    path: /root/luacjson.sh
+    state: absent
+
+- name: "luarocks install luajwtjitsi"
+  shell: "luarocks install luajwtjitsi"
+
+- name: "Add apt-key for prosody"
+  apt_key:
+    url: https://prosody.im/files/prosody-debian-packages.key
+    state: present
+
+- apt_repository:
+    repo: "deb http://packages.prosody.im/debian {{ ansible_distribution_release }} main"
+    state: present
+
+- name: "update and upgrade packages"
+  apt: 
+    update_cache: 'True'
+    upgrade: 'True'
+
+- name: "install prosody"
+  apt:
+    name:
+    - prosody
+
+- name: "reboot server"
+  reboot:
+
+- name: Copy file with owner and permissions
+  copy:
+    src: /etc/prosody/certs/localhost.key
+    dest: /etc/ssl/
+    owner: root
+    group: root
+    mode: '0644'
+    force: yes
+    remote_src: yes
+
+- name: "install nginx"
+  apt: 
+    name:
+    - nginx
+
+- name: "Add apt-key for jitsi"
+  apt_key:
+    url: https://download.jitsi.org/jitsi-key.gpg.key
+    state: present
+
+- apt_repository:
+    repo: "deb https://download.jitsi.org stable/"
+    state: present
+
+- name: "update and upgrade packages"
+  apt: 
+    update_cache: 'True'
+    upgrade: 'True'
+
+- name: "Set debconf jitsi-videobridge"
+  debconf:
+    name: jitsi-videobridge 
+    question: jitsi-videobridge/jvb-hostname
+    value: "{{ jitsi_hostname }}"
+    vtype: string
+
+- name: "Set debconf jitsi-meet-web-config"
+  debconf:
+    name: jitsi-meet-web-config
+    question: jitsi-meet/cert-choice
+    value: "Generate a new self-signed certificate (You will later get a chance to obtain a Let's encrypt certificate)"
+    vtype: select
+
+- name: "install jitsi-meet"
+  apt: 
+    name:
+    - jitsi-meet
+
+- include: token-auth.yml
+
+- name: Restart service nginx
+  service:
+    name: nginx
+    state: restarted
+
+- name: Restart service prosody
+  service:
+    name: prosody
+    state: restarted
+
+- name: Restart service jicofo
+  service:
+    name: jicofo
+    state: restarted
+
+- name: Restart service jitsi-videobridge
+  service:
+    name: jitsi-videobridge2
+    state: restarted

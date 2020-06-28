@@ -1,0 +1,5 @@
+---
+- hosts: jitsi
+  become: true
+  tasks:
+    - debug: var=ansible_facts

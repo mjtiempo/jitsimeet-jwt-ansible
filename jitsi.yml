@@ -1,0 +1,7 @@
+- hosts: jitsi
+  vars:
+    app_id: "app_id_s0m3r4nd0m1D"
+    app_secret: "app_secret_4Ls0V3ryR4nD0mK3y"
+    jitsi_hostname: "jitsi.vbox"
+  roles:
+    - jitsi

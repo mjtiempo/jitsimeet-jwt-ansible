@@ -1,0 +1,7 @@
+[jitsi]
+jitsi.vbox
+
+[jitsi:vars]
+ansible_user=ubuntu
+ansible_become=true
+ansible_become_password=ubuntu
